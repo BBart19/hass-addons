@@ -55,7 +55,7 @@ function ensure_persistent_config() {
     fi
     
     local mqtt_enabled=$(get_option "mqtt_enabled" "false")
-    local mqtt_host=$(get_option "mqtt_host" "127.0.0.1")
+    local mqtt_host=$(get_option "mqtt_host" "")
     local mqtt_port=$(get_option "mqtt_port" "1883")
     local mqtt_username=$(get_option "mqtt_username" "")
     local mqtt_password=$(get_option "mqtt_password" "")

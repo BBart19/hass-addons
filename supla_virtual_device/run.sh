@@ -26,7 +26,7 @@ function get_option() {
 function ensure_persistent_config() {
     local config_file="$SHARED_DIR/supla-virtual-device.cfg"
     
-    # Sprawdź czy mamy już persistent konfigurację
+    # Sprawdanie czy mamy już persistent konfigurację
     if [[ -f "$config_file" ]]; then
         echo -e "${GREEN}[CONFIG]${NC} Using existing persistent configuration"
         return 0

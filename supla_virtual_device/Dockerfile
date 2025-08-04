@@ -2,7 +2,7 @@ FROM ubuntu:latest
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# DOKŁADNIE te same pakiety jak w działającym setupie
+
 RUN apt-get update && apt-get install -y \
     bash \
     curl \
@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y \
     jq \
     && rm -rf /var/lib/apt/lists/*
 
-# Kopiuj skrypt
+
 COPY run.sh /app/
 RUN chmod +x /app/run.sh
 

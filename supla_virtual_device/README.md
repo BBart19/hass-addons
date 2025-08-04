@@ -19,5 +19,3 @@ Addon Home Assistant umożliwiający uruchomienie SUPLA Virtual Device.
 - **mqtt_enabled** - Włącz jeśli używasz MQTT
 - **channels** - Konfiguracja kanałów do przekazywania danych poprzez plik /homeassistant/supla-virtual-device/supla-virtual-device.cfg
 
-### Przykład konfiguracji kanałów:
-

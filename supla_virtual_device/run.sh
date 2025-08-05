@@ -38,6 +38,16 @@ function get_option() {
         '.[$key] // $default' $CONFIG_PATH
 }
 
+# Funkcja monitorowania stanu procesu w tle
+function monitor_process() {
+    local supla_pid=$1
+    while kill -0 "$supla_pid" 2>/dev/null; do
+        sleep 30
+        log "INFO" "💓 Process heartbeat: SUPLA Virtual Device is running (PID: $supla_pid)"
+    done
+    log "ERROR" "💔 SUPLA Virtual Device process died unexpectedly!"
+}
+
 # ULEPSZONA funkcja - aktualizuje config z HA ale zachowuje klucze i kanały
 function ensure_persistent_config() {
     local config_file="$SHARED_DIR/supla-virtual-device.cfg"
@@ -209,7 +219,7 @@ function main() {
     
     log "INFO" "📂 Working directory: $(pwd)"
     
-    # Utwórz persistent konfigurację (tylko jeśli nie istnieje)
+    # Utwórz persistent konfigurację
     ensure_persistent_config
     
     log "BUILD" "🔍 Checking for existing SUPLA Virtual Device build"
@@ -267,36 +277,73 @@ function main() {
     chmod +x ./supla-virtual-device
     log "SUCCESS" "✅ Binary permissions set"
     
-    log "INFO" "🎯 Starting SUPLA Virtual Device process"
+    # Sprawdź czy binary wspiera --help lub --debug
+    log "INFO" "🔍 Checking for debug options in supla-virtual-device"
+    if ./supla-virtual-device --help >/dev/null 2>&1; then
+        log "INFO" "📖 Binary supports --help option"
+    fi
+    
+    log "INFO" "🎯 Starting SUPLA Virtual Device process with enhanced logging"
     log "INFO" "📡 Device will connect to SUPLA Cloud and start processing"
     
-    # Uruchom SUPLA Virtual Device
+    # Uruchom SUPLA Virtual Device z rozszerzonym logowaniem
     ./supla-virtual-device 2>&1 | while IFS= read -r line; do
-        # Kolorowanie różnych typów logów SUPLA
-        case "$line" in
-            *"SUPLA-VIRTUAL-DEVICE"*) 
-                echo -e "${GREEN}[SUPLA]${NC} $(date '+%H:%M:%S') 🎯 $line" ;;
-            *"connected"*|*"Connected"*) 
-                echo -e "${GREEN}[SUPLA]${NC} $(date '+%H:%M:%S') ✅ $line" ;;
-            *"error"*|*"ERROR"*|*"Error"*) 
-                echo -e "${RED}[SUPLA]${NC} $(date '+%H:%M:%S') ❌ $line" ;;
-            *"mqtt"*|*"MQTT"*) 
-                echo -e "${CYAN}[SUPLA]${NC} $(date '+%H:%M:%S') 📡 $line" ;;
-            *"channel"*|*"Channel"*|*"CHANNEL"*) 
-                echo -e "${PURPLE}[SUPLA]${NC} $(date '+%H:%M:%S') 📊 $line" ;;
-            *"Registered"*|*"registered"*) 
-                echo -e "${GREEN}[SUPLA]${NC} $(date '+%H:%M:%S') 🎉 $line" ;;
-            *) 
-                echo -e "${GREEN}[SUPLA]${NC} $(date '+%H:%M:%S') ℹ️  $line" ;;
-        esac
-    done
+        # Szczegółowe filtrowanie i kolorowanie logów SUPLA
+        if [[ "$line" == *"disconnect"* || "$line" == *"Disconnect"* || "$line" == *"DISCONNECT"* ]]; then
+            echo -e "${RED}[SUPLA-NET]${NC} $(date '+%H:%M:%S') 🔌 DISCONNECTED: $line"
+        elif [[ "$line" == *"reconnect"* || "$line" == *"Reconnect"* || "$line" == *"RECONNECT"* ]]; then
+            echo -e "${YELLOW}[SUPLA-NET]${NC} $(date '+%H:%M:%S') 🔄 RECONNECTING: $line"
+        elif [[ "$line" == *"connected"* || "$line" == *"Connected"* || "$line" == *"CONNECTED"* ]]; then
+            echo -e "${GREEN}[SUPLA-NET]${NC} $(date '+%H:%M:%S') ✅ CONNECTED: $line"
+        elif [[ "$line" == *"registered"* || "$line" == *"Registered"* || "$line" == *"REGISTERED"* ]]; then
+            echo -e "${GREEN}[SUPLA-REG]${NC} $(date '+%H:%M:%S') 🎉 REGISTERED: $line"
+        elif [[ "$line" == *"mqtt"* || "$line" == *"MQTT"* ]]; then
+            if [[ "$line" == *"error"* || "$line" == *"ERROR"* ]]; then
+                echo -e "${RED}[SUPLA-MQTT]${NC} $(date '+%H:%M:%S') ❌ MQTT ERROR: $line"
+            elif [[ "$line" == *"connect"* ]]; then
+                echo -e "${GREEN}[SUPLA-MQTT]${NC} $(date '+%H:%M:%S') 🔗 MQTT CONNECTED: $line"
+            else
+                echo -e "${CYAN}[SUPLA-MQTT]${NC} $(date '+%H:%M:%S') 📡 MQTT: $line"
+            fi
+        elif [[ "$line" == *"channel"* || "$line" == *"Channel"* || "$line" == *"CHANNEL"* ]]; then
+            echo -e "${PURPLE}[SUPLA-CHAN]${NC} $(date '+%H:%M:%S') 📊 CHANNEL: $line"
+        elif [[ "$line" == *"error"* || "$line" == *"ERROR"* || "$line" == *"Error"* ]]; then
+            echo -e "${RED}[SUPLA-ERR]${NC} $(date '+%H:%M:%S') ❌ ERROR: $line"
+        elif [[ "$line" == *"SUPLA-VIRTUAL-DEVICE"* ]]; then
+            echo -e "${GREEN}[SUPLA-INIT]${NC} $(date '+%H:%M:%S') 🎯 $line"
+        elif [[ "$line" == *"version"* || "$line" == *"Version"* || "$line" == *"VERSION"* ]]; then
+            echo -e "${BLUE}[SUPLA-VER]${NC} $(date '+%H:%M:%S') 📌 VERSION: $line"
+        elif [[ "$line" == *"server"* || "$line" == *"Server"* || "$line" == *"SERVER"* ]]; then
+            echo -e "${CYAN}[SUPLA-SRV]${NC} $(date '+%H:%M:%S') 🌐 SERVER: $line"
+        else
+            echo -e "${GREEN}[SUPLA-INFO]${NC} $(date '+%H:%M:%S') ℹ️  $line"
+        fi
+    done &
+    
+    # Zapamiętaj PID procesu SUPLA i uruchom monitor
+    SUPLA_PID=$!
+    log "INFO" "🎬 SUPLA Virtual Device started with PID: $SUPLA_PID"
+    
+    # Uruchom monitoring procesu w tle
+    monitor_process $SUPLA_PID &
+    MONITOR_PID=$!
+    
+    # Czekaj na proces SUPLA
+    wait $SUPLA_PID
+    
+    # Zakończ monitoring jeśli proces SUPLA się zakończył
+    kill $MONITOR_PID 2>/dev/null || true
 }
 
 # Obsługa sygnałów
 cleanup() {
     log "WARN" "🛑 Received shutdown signal"
     log "INFO" "🧹 Cleaning up SUPLA Virtual Device processes"
+    
+    # Zakończ wszystkie procesy związane z SUPLA
     pkill -f supla-virtual-device 2>/dev/null || true
+    pkill -f monitor_process 2>/dev/null || true
+    
     log "SUCCESS" "✅ Shutdown completed gracefully"
     exit 0
 }

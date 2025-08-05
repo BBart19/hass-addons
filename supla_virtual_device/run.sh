@@ -109,9 +109,8 @@ location_password=""
 EOF
 
     if [[ "$mqtt_enabled" == "true" ]]; then
-        # Dodaj unikalny suffix do client_name (rozwiązuje problem reconnect)
-        local unique_suffix=$(openssl rand -hex 3)
-        local unique_client_name="${mqtt_client_name}-${unique_suffix}"
+        local unique_client_name="${mqtt_client_name}"
+
         
         cat >> "$config_file" << EOF
 [MQTT]

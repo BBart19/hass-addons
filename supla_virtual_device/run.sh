@@ -22,17 +22,34 @@ function get_option() {
         '.[$key] // $default' $CONFIG_PATH
 }
 
-# UPROSZCZONA funkcja - bez konwersji kanałów
+# ULEPSZONA funkcja - aktualizuje config z HA ale zachowuje klucze i kanały
 function ensure_persistent_config() {
     local config_file="$SHARED_DIR/supla-virtual-device.cfg"
     
-    # Sprawdanie czy mamy już persistent konfigurację
-    if [[ -f "$config_file" ]]; then
-        echo -e "${GREEN}[CONFIG]${NC} Using existing persistent configuration"
-        return 0
-    fi
+    local old_guid=""
+    local old_authkey=""
+    local channels_config=""
     
-    echo -e "${YELLOW}[CONFIG]${NC} Creating basic persistent configuration..."
+    # Sprawdź czy istnieje plik konfiguracyjny i wyciągnij z niego klucze/kanały
+    if [[ -f "$config_file" ]]; then
+        echo -e "${YELLOW}[CONFIG]${NC} Updating configuration with new HA settings, preserving keys and channels"
+        
+        # Wyciągnij istniejący device_guid i auth_key
+        old_guid=$(grep -E '^device_guid=' "$config_file" | cut -d= -f2-)
+        old_authkey=$(grep -E '^auth_key=' "$config_file" | cut -d= -f2-)
+        
+        # Wyciągnij wszystkie bloki kanałów [CHANNEL_X]
+        channels_config=$(awk '/^\[CHANNEL_[0-9]+\]/{flag=1} flag{print} /^$/{if(flag) flag=0}' "$config_file")
+        
+        echo -e "${GREEN}[CONFIG]${NC} Preserved GUID: ${old_guid:0:8}..."
+        echo -e "${GREEN}[CONFIG]${NC} Preserved AuthKey: ${old_authkey:0:8}..."
+        if [[ -n "$channels_config" ]]; then
+            local channel_count=$(echo "$channels_config" | grep -c '^\[CHANNEL_' || echo "0")
+            echo -e "${GREEN}[CONFIG]${NC} Preserved $channel_count channel(s)"
+        fi
+    else
+        echo -e "${YELLOW}[CONFIG]${NC} Creating new persistent configuration..."
+    fi
     
     # Pobierz podstawowe ustawienia z HA
     local device_name=$(get_option "device_name" "SUPLA VIRTUAL DEVICE")
@@ -40,18 +57,23 @@ function ensure_persistent_config() {
     local protocol_version=$(get_option "protocol_version" "12")
     local email=$(get_option "email" "")
     
-    # Generuj GUID i AuthKey TYLKO raz
-    local device_guid=$(get_option "device_guid" "")
-    local auth_key=$(get_option "auth_key" "")
-    
+    # Użyj zachowanych kluczy lub wygeneruj nowe
+    local device_guid="$old_guid"
     if [[ -z "$device_guid" ]]; then
-        device_guid=$(openssl rand -hex 16)
-        echo -e "${YELLOW}[CONFIG]${NC} Generated new GUID: $device_guid"
+        device_guid=$(get_option "device_guid" "")
+        if [[ -z "$device_guid" ]]; then
+            device_guid=$(openssl rand -hex 16)
+            echo -e "${YELLOW}[CONFIG]${NC} Generated new GUID: $device_guid"
+        fi
     fi
     
+    local auth_key="$old_authkey"
     if [[ -z "$auth_key" ]]; then
-        auth_key=$(openssl rand -hex 16)
-        echo -e "${YELLOW}[CONFIG]${NC} Generated new AuthKey: ${auth_key:0:8}..."
+        auth_key=$(get_option "auth_key" "")
+        if [[ -z "$auth_key" ]]; then
+            auth_key=$(openssl rand -hex 16)
+            echo -e "${YELLOW}[CONFIG]${NC} Generated new AuthKey: ${auth_key:0:8}..."
+        fi
     fi
     
     local mqtt_enabled=$(get_option "mqtt_enabled" "false")
@@ -66,7 +88,7 @@ function ensure_persistent_config() {
         exit 1
     fi
 
-    # Utwórz podstawową konfigurację (BEZ KANAŁÓW)
+    # Wygeneruj nowy plik konfiguracyjny z aktualnymi ustawieniami HA
     cat > "$config_file" << EOF
 [GLOBAL]
 device_name=$device_name
@@ -87,19 +109,32 @@ location_password=""
 EOF
 
     if [[ "$mqtt_enabled" == "true" ]]; then
+        # Dodaj unikalny suffix do client_name (rozwiązuje problem reconnect)
+        local unique_suffix=$(openssl rand -hex 3)
+        local unique_client_name="${mqtt_client_name}-${unique_suffix}"
+        
         cat >> "$config_file" << EOF
 [MQTT]
 host=$mqtt_host
 port=$mqtt_port
 username=$mqtt_username
 password=$mqtt_password
-client_name=$mqtt_client_name
+client_name=$unique_client_name
+keep_alive_sec=60
+clean_session=true
 
 EOF
+        echo -e "${GREEN}[MQTT]${NC} MQTT configured with unique client: $unique_client_name"
     fi
 
-    # DODAJ KOMENTARZ O RĘCZNEJ KONFIGURACJI KANAŁÓW
-    cat >> "$config_file" << EOF
+    # Dopisz zachowane konfiguracje kanałów na końcu
+    if [[ -n "$channels_config" ]]; then
+        echo "" >> "$config_file"  # Pusta linia przed kanałami
+        echo "$channels_config" >> "$config_file"
+        echo -e "${GREEN}[CONFIG]${NC} Restored preserved channel configurations"
+    else
+        # Dodaj komentarz o ręcznej konfiguracji kanałów
+        cat >> "$config_file" << EOF
 # 
 # KANAŁY - skonfiguruj ręcznie poniżej według dokumentacji GitHub:
 # https://github.com/lukbek/supla-virtual-device
@@ -119,9 +154,9 @@ EOF
 #
 
 EOF
+    fi
 
-    echo -e "${GREEN}[CONFIG]${NC} Basic configuration created - configure channels manually in:"
-    echo -e "${GREEN}[CONFIG]${NC} $config_file"
+    echo -e "${GREEN}[CONFIG]${NC} Configuration updated with new HA settings and preserved data"
 }
 
 # Główna funkcja - używa /config/

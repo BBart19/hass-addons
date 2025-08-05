@@ -13,11 +13,8 @@ PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-# Zmienne globalne dla monitorowania
-RESTART_COUNT=0
-MAX_RESTARTS=10
+# Zmienne globalne
 LAST_SUCCESS_TIME=$(date +%s)
-STARTUP_TIME=$(date +%s)
 WATCHDOG_PID=""
 
 # Funkcja logowania z timestamp
@@ -47,7 +44,7 @@ function get_option() {
         '.[$key] // $default' $CONFIG_PATH
 }
 
-# 🐕 UPROSZCZONA FUNKCJA - restart po pierwszym niepowodzeniu
+# 🐕 WATCHDOG - sprawdza status i zabija proces przy problemach
 function watchdog_loop() {
     local enabled=$(get_option "watchdog_enabled" "false")
     
@@ -77,7 +74,7 @@ function watchdog_loop() {
     log "WATCHDOG" "🐕 Starting SUPLA Cloud Watchdog"
     log "WATCHDOG" "📡 URL: $url"
     log "WATCHDOG" "🔑 Code: ${code:0:8}..."
-    log "WATCHDOG" "⏱️  Interval: ${interval}s (immediate restart on failure)"
+    log "WATCHDOG" "⏱️  Interval: ${interval}s"
     
     # Czekaj 30 sekund na startup
     sleep 30
@@ -97,11 +94,7 @@ function watchdog_loop() {
         
         if [[ $curl_exit_code -ne 0 ]]; then
             log "ERROR" "🐕 ❌ API request failed (curl exit code: $curl_exit_code)"
-            log "RESTART" "🐕 🔄 Triggering immediate restart due to API failure"
-            
-            # Natychmiastowy restart
-            pkill -f supla-virtual-device 2>/dev/null || true
-            sleep 10
+            restart_supla_process
             
         else
             # Parsuj JSON response
@@ -113,19 +106,10 @@ function watchdog_loop() {
                 LAST_SUCCESS_TIME=$(date +%s)
             elif [[ "$connected" == "false" ]]; then
                 log "ERROR" "🐕 ❌ Device is DISCONNECTED ($connected_code)"
-                log "RESTART" "🐕 🔄 Triggering immediate restart due to disconnection"
-                
-                # Natychmiastowy restart
-                pkill -f supla-virtual-device 2>/dev/null || true
-                sleep 10
-                
+                restart_supla_process
             else
                 log "WARN" "🐕 ⚠️  Invalid response from API: $response"
-                log "RESTART" "🐕 🔄 Triggering immediate restart due to invalid response"
-                
-                # Natychmiastowy restart
-                pkill -f supla-virtual-device 2>/dev/null || true
-                sleep 10
+                restart_supla_process
             fi
         fi
         
@@ -134,36 +118,28 @@ function watchdog_loop() {
     done
 }
 
-
-# Funkcja sprawdzania zdrowia procesu
-function check_process_health() {
-    local pid=$1
-    local timeout=300  # 5 minut timeout
+# 🔄 FUNKCJA - zabija proces SUPLA (główna pętla go uruchomi ponownie)
+function restart_supla_process() {
+    log "RESTART" "🐕 🔄 Triggering SUPLA process restart"
     
-    while true; do
-        if ! kill -0 "$pid" 2>/dev/null; then
-            log "ERROR" "💀 Process died (PID: $pid)"
-            return 1
-        fi
-        
-        # Sprawdź czy proces nie zawisnął
-        local current_time=$(date +%s)
-        local idle_time=$((current_time - LAST_SUCCESS_TIME))
-        
-        if [[ $idle_time -gt $timeout ]]; then
-            log "WARN" "⚠️  Process appears hung (idle for ${idle_time}s)"
-            kill -TERM "$pid" 2>/dev/null || true
-            sleep 5
-            kill -KILL "$pid" 2>/dev/null || true
-            return 1
-        fi
-        
-        sleep 60
-        log "INFO" "💓 Health check OK (PID: $pid, idle: ${idle_time}s)"
-    done
+    # Zabij istniejący proces
+    log "INFO" "🔪 Killing existing SUPLA process"
+    pkill -TERM -f supla-virtual-device 2>/dev/null || true
+    sleep 3
+    pkill -KILL -f supla-virtual-device 2>/dev/null || true
+    sleep 2
+    
+    # Sprawdź czy został zabity
+    if pgrep -f supla-virtual-device >/dev/null 2>&1; then
+        log "ERROR" "❌ Failed to kill SUPLA process, forcing"
+        pkill -9 -f supla-virtual-device 2>/dev/null || true
+        sleep 2
+    fi
+    
+    log "SUCCESS" "✅ SUPLA process terminated - main loop will restart it"
 }
 
-# ULEPSZONA funkcja konfiguracji
+# Funkcja konfiguracji
 function ensure_persistent_config() {
     local config_file="$SHARED_DIR/supla-virtual-device.cfg"
     
@@ -178,7 +154,7 @@ function ensure_persistent_config() {
         
         old_guid=$(grep -E '^device_guid=' "$config_file" | cut -d= -f2-)
         old_authkey=$(grep -E '^auth_key=' "$config_file" | cut -d= -f2-)
-        channels_config=$(awk '/^\[CHANNEL_/{flag=1} flag{print} /^$/{if(flag) flag=0}' "$config_file")
+        channels_config=$(awk '/^[[]CHANNEL_/{flag=1} flag{print} /^$/{if(flag) flag=0}' "$config_file")
         
         log "CONFIG" "🔑 Preserved GUID: ${old_guid:0:8}..."
         log "CONFIG" "🔐 Preserved AuthKey: ${old_authkey:0:8}..."
@@ -244,7 +220,7 @@ location_password=""
 EOF
 
     if [[ "$mqtt_enabled" == "true" ]]; then
-        local unique_client_name="${mqtt_client_name}"
+        local unique_client_name="$mqtt_client_name"
         
         cat >> "$config_file" << EOF
 [MQTT]
@@ -271,61 +247,13 @@ EOF
 # KANAŁY - skonfiguruj ręcznie według dokumentacji GitHub:
 # https://github.com/lukbek/supla-virtual-device
 #
-
 EOF
     fi
 
     log "SUCCESS" "✅ Configuration completed"
 }
 
-# Funkcja uruchamiania SUPLA z monitorowaniem
-function run_supla_with_monitoring() {
-    local attempt=$1
-    
-    log "INFO" "🎯 Starting SUPLA Virtual Device (attempt #$attempt)"
-    
-    ./supla-virtual-device 2>&1 | while IFS= read -r line; do
-        LAST_SUCCESS_TIME=$(date +%s)
-        
-        # Enhanced logging z kolorowaniem
-        if [[ "$line" == *"disconnect"* || "$line" == *"Disconnect"* ]]; then
-            log "WARN" "🔌 DISCONNECTED: $line"
-        elif [[ "$line" == *"connected"* || "$line" == *"Connected"* ]]; then
-            log "SUCCESS" "✅ CONNECTED: $line"
-            LAST_SUCCESS_TIME=$(date +%s)
-        elif [[ "$line" == *"registered"* || "$line" == *"Registered"* ]]; then
-            log "SUCCESS" "🎉 REGISTERED: $line"
-            LAST_SUCCESS_TIME=$(date +%s)
-        elif [[ "$line" == *"mqtt"* || "$line" == *"MQTT"* ]]; then
-            if [[ "$line" == *"error"* ]]; then
-                log "ERROR" "❌ MQTT ERROR: $line"
-            else
-                log "INFO" "📡 MQTT: $line"
-            fi
-        elif [[ "$line" == *"error"* || "$line" == *"ERROR"* ]]; then
-            log "ERROR" "❌ ERROR: $line"
-        else
-            log "INFO" "ℹ️  $line"
-        fi
-    done &
-    
-    local supla_pid=$!
-    log "INFO" "🎬 SUPLA started with PID: $supla_pid"
-    
-    # Uruchom monitoring w tle
-    check_process_health $supla_pid &
-    local monitor_pid=$!
-    
-    wait $supla_pid
-    local exit_code=$?
-    
-    kill $monitor_pid 2>/dev/null || true
-    log "WARN" "⚠️  SUPLA process exited with code: $exit_code"
-    
-    return $exit_code
-}
-
-# Główna funkcja z auto-restart i watchdog
+# Główna funkcja - UPROSZCZONA (watchdog zarządza restartami)
 function main() {
     # Setup
     mkdir -p "$SHARED_DIR"
@@ -363,37 +291,41 @@ function main() {
     WATCHDOG_PID=$!
     log "INFO" "🐕 Cloud watchdog started with PID: $WATCHDOG_PID"
     
-    # PĘTLA AUTO-RESTART
-    log "INFO" "🔄 Starting auto-restart loop (max $MAX_RESTARTS restarts)"
+    # NIESKOŃCZONA PĘTLA URUCHAMIANIA SUPLA
+    log "INFO" "🎯 Starting SUPLA Virtual Device main loop"
     
-    while [[ $RESTART_COUNT -lt $MAX_RESTARTS ]]; do
-        local current_time=$(date +%s)
-        local uptime=$((current_time - STARTUP_TIME))
+    while true; do
+        log "INFO" "🚀 Starting SUPLA Virtual Device process"
         
-        if [[ $uptime -gt 3600 ]]; then
-            RESTART_COUNT=0
-            STARTUP_TIME=$current_time
-            log "INFO" "⏰ Uptime > 1h, resetting restart counter"
-        fi
-        
-        if run_supla_with_monitoring $((RESTART_COUNT + 1)); then
-            log "SUCCESS" "✅ SUPLA exited normally"
-            break
-        else
-            RESTART_COUNT=$((RESTART_COUNT + 1))
+        ./supla-virtual-device 2>&1 | while IFS= read -r line; do
+            LAST_SUCCESS_TIME=$(date +%s)
             
-            if [[ $RESTART_COUNT -lt $MAX_RESTARTS ]]; then
-                local delay=$((RESTART_COUNT * 10))
-                log "RESTART" "🔄 Restart #$RESTART_COUNT/$MAX_RESTARTS in ${delay}s"
-                sleep $delay
+            # Enhanced logging z kolorowaniem
+            if [[ "$line" == *"disconnect"* || "$line" == *"Disconnect"* ]]; then
+                log "WARN" "🔌 DISCONNECTED: $line"
+            elif [[ "$line" == *"connected"* || "$line" == *"Connected"* ]]; then
+                log "SUCCESS" "✅ CONNECTED: $line"
+                LAST_SUCCESS_TIME=$(date +%s)
+            elif [[ "$line" == *"registered"* || "$line" == *"Registered"* ]]; then
+                log "SUCCESS" "🎉 REGISTERED: $line"
+                LAST_SUCCESS_TIME=$(date +%s)
+            elif [[ "$line" == *"mqtt"* || "$line" == *"MQTT"* ]]; then
+                if [[ "$line" == *"error"* ]]; then
+                    log "ERROR" "❌ MQTT ERROR: $line"
+                else
+                    log "INFO" "📡 MQTT: $line"
+                fi
+            elif [[ "$line" == *"error"* || "$line" == *"ERROR"* ]]; then
+                log "ERROR" "❌ ERROR: $line"
             else
-                log "ERROR" "💥 Max restarts reached ($MAX_RESTARTS)"
-                exit 1
+                log "INFO" "ℹ️  $line"
             fi
-        fi
+        done
+        
+        # Proces się zakończył - restart po 5 sekundach
+        log "WARN" "⚠️  SUPLA process exited, restarting in 5s"
+        sleep 5
     done
-    
-    log "INFO" "🏁 Auto-restart loop ended"
 }
 
 # Obsługa sygnałów
@@ -409,7 +341,6 @@ cleanup() {
     
     # Zakończ SUPLA
     pkill -f supla-virtual-device 2>/dev/null || true
-    pkill -f check_process_health 2>/dev/null || true
     
     log "SUCCESS" "✅ Cleanup completed"
     exit 0

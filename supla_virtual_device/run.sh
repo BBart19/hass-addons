@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 set -e
-
 CONFIG_PATH="/data/options.json"
 SHARED_DIR="/config/supla-virtual-device"
-
 # Kolory dla logów
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -12,11 +10,9 @@ BLUE='\033[0;34m'
 PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m'
-
 # Zmienne globalne
 LAST_SUCCESS_TIME=$(date +%s)
 WATCHDOG_PID=""
-
 # Funkcja logowania z timestamp
 function log() {
     local level=$1
@@ -32,10 +28,8 @@ function log() {
         "WATCHDOG") echo -e "${CYAN}[$(date '+%Y-%m-%d %H:%M:%S')]${NC} ${CYAN}[WATCHDOG]${NC} ${msg}" ;;
     esac
 }
-
 log "INFO" "🚀 Starting SUPLA Virtual Device addon with cloud watchdog"
 log "INFO" "📁 Using persistent storage: $SHARED_DIR"
-
 # Funkcja do odczytywania opcji z Home Assistant
 function get_option() {
     local key=$1
@@ -43,8 +37,7 @@ function get_option() {
     jq --raw-output --arg key "$key" --arg default "$default_value" \
         '.[$key] // $default' $CONFIG_PATH
 }
-
-# 🐕 WATCHDOG - sprawdza status i zabija proces przy problemach (QUIET VERSION)
+# 🐕 WATCHDOG - sprawdza status i zabija proces przy problemach
 function watchdog_loop() {
     local enabled=$(get_option "watchdog_enabled" "false")
     
@@ -74,19 +67,12 @@ function watchdog_loop() {
     log "WATCHDOG" "🐕 Starting SUPLA Cloud Watchdog"
     log "WATCHDOG" "📡 URL: $url"
     log "WATCHDOG" "🔑 Code: ${code:0:8}..."
-    log "WATCHDOG" "⏱️  Interval: ${interval}s (quiet mode - only status changes logged)"
+    log "WATCHDOG" "⏱️  Interval: ${interval}s"
     
     # Czekaj 30 sekund na startup
     sleep 30
     
-    # NOWA ZMIENNA - śledzenie poprzedniego statusu
-    local last_status=""
-    local check_counter=0
-    
     while true; do
-        check_counter=$((check_counter + 1))
-        
-        # USUNIĘTE - nie loguj każdego sprawdzenia:
         # log "WATCHDOG" "🔍 Checking device status via SUPLA Cloud API"
         
         # Wykonaj zapytanie do SUPLA Cloud API
@@ -100,10 +86,8 @@ function watchdog_loop() {
         local curl_exit_code=$?
         
         if [[ $curl_exit_code -ne 0 ]]; then
-            # ZAWSZE loguj błędy API
             log "ERROR" "🐕 ❌ API request failed (curl exit code: $curl_exit_code)"
             restart_supla_process
-            last_status="ERROR"
             
         else
             # Parsuj JSON response
@@ -111,28 +95,14 @@ function watchdog_loop() {
             local connected_code=$(echo "$response" | jq -r '.connectedCode' 2>/dev/null)
             
             if [[ "$connected" == "true" ]]; then
-                # Loguj SUCCESS tylko przy ZMIANIE statusu lub co 60 sprawdzeń (żeby wiedzieć że działa)
-                if [[ "$last_status" != "CONNECTED" ]] || (( check_counter % 60 == 0 )); then
-                    if [[ "$last_status" != "CONNECTED" ]]; then
-                        log "SUCCESS" "🐕 ✅ Device is CONNECTED ($connected_code) - status changed"
-                    else
-                        log "INFO" "🐕 💓 Watchdog heartbeat - device still CONNECTED (check #$check_counter)"
-                    fi
-                fi
-                last_status="CONNECTED"
+                log "SUCCESS" "🐕 ✅ Device is CONNECTED ($connected_code)"
                 LAST_SUCCESS_TIME=$(date +%s)
-                
             elif [[ "$connected" == "false" ]]; then
-                # ZAWSZE loguj disconnection
                 log "ERROR" "🐕 ❌ Device is DISCONNECTED ($connected_code)"
                 restart_supla_process
-                last_status="DISCONNECTED"
-                
             else
-                # ZAWSZE loguj invalid response
                 log "WARN" "🐕 ⚠️  Invalid response from API: $response"
                 restart_supla_process
-                last_status="INVALID"
             fi
         fi
         
@@ -140,8 +110,6 @@ function watchdog_loop() {
         sleep "$interval"
     done
 }
-
-
 # 🔄 FUNKCJA - zabija proces SUPLA (główna pętla go uruchomi ponownie)
 function restart_supla_process() {
     log "RESTART" "🐕 🔄 Triggering SUPLA process restart"
@@ -162,7 +130,6 @@ function restart_supla_process() {
     
     log "SUCCESS" "✅ SUPLA process terminated - main loop will restart it"
 }
-
 # Funkcja konfiguracji
 function ensure_persistent_config() {
     local config_file="$SHARED_DIR/supla-virtual-device.cfg"
@@ -217,32 +184,25 @@ function ensure_persistent_config() {
     local mqtt_username=$(get_option "mqtt_username" "")
     local mqtt_password=$(get_option "mqtt_password" "")
     local mqtt_client_name=$(get_option "mqtt_client_name" "supla-virtual-device")
-
     if [[ -z "$email" ]]; then
         log "ERROR" "❌ Email is required!"
         exit 1
     fi
-
     # Wygeneruj konfigurację
     cat > "$config_file" << EOF
 [GLOBAL]
 device_name=$device_name
 device_guid=$device_guid
-
 [SERVER]
 host=$server_host
 protocol_version=$protocol_version
-
 [AUTH]
 email=$email
 auth_key=$auth_key
-
 [LOCATION]
 location_id=0
 location_password=""
-
 EOF
-
     if [[ "$mqtt_enabled" == "true" ]]; then
         local unique_client_name="$mqtt_client_name"
         
@@ -255,11 +215,9 @@ password=$mqtt_password
 client_name=$unique_client_name
 keep_alive_sec=30
 clean_session=true
-
 EOF
         log "SUCCESS" "✅ MQTT configured"
     fi
-
     # Dopisz zachowane kanały
     if [[ -n "$channels_config" ]]; then
         echo "" >> "$config_file"
@@ -273,10 +231,8 @@ EOF
 #
 EOF
     fi
-
     log "SUCCESS" "✅ Configuration completed"
 }
-
 # Główna funkcja - UPROSZCZONA (watchdog zarządza restartami)
 function main() {
     # Setup
@@ -325,21 +281,21 @@ function main() {
             LAST_SUCCESS_TIME=$(date +%s)
             
             # Enhanced logging z kolorowaniem
-            if [[ "$line" == *"disconnect"* || "$line" == *"Disconnect"* ]]; then
+            if [[ "$line" == "disconnect" || "$line" == "Disconnect" ]]; then
                 log "WARN" "🔌 DISCONNECTED: $line"
-            elif [[ "$line" == *"connected"* || "$line" == *"Connected"* ]]; then
+            elif [[ "$line" == "connected" || "$line" == "Connected" ]]; then
                 log "SUCCESS" "✅ CONNECTED: $line"
                 LAST_SUCCESS_TIME=$(date +%s)
-            elif [[ "$line" == *"registered"* || "$line" == *"Registered"* ]]; then
+            elif [[ "$line" == "registered" || "$line" == "Registered" ]]; then
                 log "SUCCESS" "🎉 REGISTERED: $line"
                 LAST_SUCCESS_TIME=$(date +%s)
-            elif [[ "$line" == *"mqtt"* || "$line" == *"MQTT"* ]]; then
-                if [[ "$line" == *"error"* ]]; then
+            elif [[ "$line" == "mqtt" || "$line" == "MQTT" ]]; then
+                if [[ "$line" == "error" ]]; then
                     log "ERROR" "❌ MQTT ERROR: $line"
                 else
                     log "INFO" "📡 MQTT: $line"
                 fi
-            elif [[ "$line" == *"error"* || "$line" == *"ERROR"* ]]; then
+            elif [[ "$line" == "error" || "$line" == "ERROR" ]]; then
                 log "ERROR" "❌ ERROR: $line"
             else
                 log "INFO" "ℹ️  $line"
@@ -351,7 +307,6 @@ function main() {
         sleep 5
     done
 }
-
 # Obsługa sygnałów
 cleanup() {
     log "WARN" "🛑 Received shutdown signal"
@@ -369,9 +324,7 @@ cleanup() {
     log "SUCCESS" "✅ Cleanup completed"
     exit 0
 }
-
 trap cleanup SIGTERM SIGINT
-
 # Uruchomienie
 main
 wait

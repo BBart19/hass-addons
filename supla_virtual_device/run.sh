@@ -44,7 +44,7 @@ function get_option() {
         '.[$key] // $default' $CONFIG_PATH
 }
 
-# 🐕 WATCHDOG - sprawdza status i zabija proces przy problemach
+# 🐕 WATCHDOG - sprawdza status i zabija proces przy problemach (QUIET VERSION)
 function watchdog_loop() {
     local enabled=$(get_option "watchdog_enabled" "false")
     
@@ -74,13 +74,20 @@ function watchdog_loop() {
     log "WATCHDOG" "🐕 Starting SUPLA Cloud Watchdog"
     log "WATCHDOG" "📡 URL: $url"
     log "WATCHDOG" "🔑 Code: ${code:0:8}..."
-    log "WATCHDOG" "⏱️  Interval: ${interval}s"
+    log "WATCHDOG" "⏱️  Interval: ${interval}s (quiet mode - only status changes logged)"
     
     # Czekaj 30 sekund na startup
     sleep 30
     
+    # NOWA ZMIENNA - śledzenie poprzedniego statusu
+    local last_status=""
+    local check_counter=0
+    
     while true; do
-        log "WATCHDOG" "🔍 Checking device status via SUPLA Cloud API"
+        check_counter=$((check_counter + 1))
+        
+        # USUNIĘTE - nie loguj każdego sprawdzenia:
+        # log "WATCHDOG" "🔍 Checking device status via SUPLA Cloud API"
         
         # Wykonaj zapytanie do SUPLA Cloud API
         local response=$(curl -s \
@@ -93,8 +100,10 @@ function watchdog_loop() {
         local curl_exit_code=$?
         
         if [[ $curl_exit_code -ne 0 ]]; then
+            # ZAWSZE loguj błędy API
             log "ERROR" "🐕 ❌ API request failed (curl exit code: $curl_exit_code)"
             restart_supla_process
+            last_status="ERROR"
             
         else
             # Parsuj JSON response
@@ -102,14 +111,28 @@ function watchdog_loop() {
             local connected_code=$(echo "$response" | jq -r '.connectedCode' 2>/dev/null)
             
             if [[ "$connected" == "true" ]]; then
-                log "SUCCESS" "🐕 ✅ Device is CONNECTED ($connected_code)"
+                # Loguj SUCCESS tylko przy ZMIANIE statusu lub co 60 sprawdzeń (żeby wiedzieć że działa)
+                if [[ "$last_status" != "CONNECTED" ]] || (( check_counter % 60 == 0 )); then
+                    if [[ "$last_status" != "CONNECTED" ]]; then
+                        log "SUCCESS" "🐕 ✅ Device is CONNECTED ($connected_code) - status changed"
+                    else
+                        log "INFO" "🐕 💓 Watchdog heartbeat - device still CONNECTED (check #$check_counter)"
+                    fi
+                fi
+                last_status="CONNECTED"
                 LAST_SUCCESS_TIME=$(date +%s)
+                
             elif [[ "$connected" == "false" ]]; then
+                # ZAWSZE loguj disconnection
                 log "ERROR" "🐕 ❌ Device is DISCONNECTED ($connected_code)"
                 restart_supla_process
+                last_status="DISCONNECTED"
+                
             else
+                # ZAWSZE loguj invalid response
                 log "WARN" "🐕 ⚠️  Invalid response from API: $response"
                 restart_supla_process
+                last_status="INVALID"
             fi
         fi
         
@@ -117,6 +140,7 @@ function watchdog_loop() {
         sleep "$interval"
     done
 }
+
 
 # 🔄 FUNKCJA - zabija proces SUPLA (główna pętla go uruchomi ponownie)
 function restart_supla_process() {

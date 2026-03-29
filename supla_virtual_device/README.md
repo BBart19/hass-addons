@@ -1,21 +1,61 @@
-# SUPLA Virtual Device dla Home Assistant
+# SUPLA Virtual Device
 
-Addon Home Assistant umożliwiający uruchomienie SUPLA Virtual Device.
+Ten addon uruchamia aktualny projekt [`BBart19/virtual-supla`](https://github.com/BBart19/virtual-supla) jako dodatek Home Assistant.
 
-## Funkcje
+## Co jest nowe
 
-✅ **MQTT Integration** - przekazywanie danych z czujników przez MQTT  
-✅ **Multi-channel Support** - obsługa wielu kanałów pomiarowych  
-✅ **Smart Caching** - szybkie uruchamianie po pierwszym buildzie  
-✅ **Home Assistant Integration** - pełna integracja z HA
+- addon buduje nowy `virtual-supla`, a nie stary historyczny fork
+- całe `supla-virtual-device.cfg` wpisujesz bezpośrednio w zakładce **Konfiguracja**
+- stan urządzenia, `dev_guid` i `last_state.txt` są trzymane trwale w `/data/var`
+- możesz dalej korzystać z plików z Home Assistanta, np. przez ścieżki w `/config/...`
 
 ## Konfiguracja
 
-### Wymagane ustawienia:
-- **email** - Twój email zarejestrowany w SUPLA Cloud
-- **server_host** - Adres serwera SUPLA
+Najważniejsze pole addonu to:
 
-### Opcjonalne ustawienia:
-- **mqtt_enabled** - Włącz jeśli używasz MQTT
-- **channels** - Konfiguracja kanałów do przekazywania danych poprzez plik /homeassistant/supla-virtual-device/supla-virtual-device.cfg
+- `config` - pełna zawartość pliku `supla-virtual-device.cfg`
 
+Opcjonalnie:
+
+- `debug` - uruchamia `supla-virtual-device -D`
+
+Domyślnie addon startuje z prostym szkieletem konfiguracji. Pełny wzór wszystkich opcji znajdziesz tutaj:
+
+- https://github.com/BBart19/virtual-supla/blob/main/supla-virtual-device.cfg.sample
+
+## Przykład
+
+```ini
+[GLOBAL]
+device_name=SUPLA VIRTUAL DEVICE
+device_guid_file=./var/dev_guid
+state_file=./var/last_state.txt
+
+[SERVER]
+host=svrX.supla.org
+protocol_version=23
+tcp_port=2015
+ssl_port=2016
+ssl_enabled=1
+
+[AUTH]
+email=you@example.com
+
+[MQTT]
+host=192.168.1.100
+port=1883
+username=mqtt-user
+password=mqtt-password
+client_name=supla-virtual-device
+
+[CHANNEL_0]
+function=TEMPERATURE
+state_topic=sensors/temperature/state
+```
+
+## Uwaga
+
+Jeśli używasz kanałów plikowych, odwołuj się do ścieżek dostępnych w kontenerze addonu, najczęściej:
+
+- `/config/...`
+- `/data/...`

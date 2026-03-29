@@ -1,24 +1,31 @@
-FROM ubuntu:latest
+FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-
 RUN apt-get update && apt-get install -y \
     bash \
+    ca-certificates \
     curl \
     git \
+    jq \
     libssl-dev \
     build-essential \
-    jq \
     && rm -rf /var/lib/apt/lists/*
 
+WORKDIR /opt/virtual-supla
 
-COPY run.sh /app/
-RUN chmod +x /app/run.sh
+RUN git clone --depth 1 https://github.com/BBart19/virtual-supla.git . \
+    && ./install.sh \
+    && install -m 0755 ./src/supla-dev/Release/supla-virtual-device /usr/local/bin/supla-virtual-device \
+    && install -m 0644 ./supla-virtual-device.cfg.sample /usr/local/share/supla-virtual-device.cfg.sample \
+    && rm -rf /opt/virtual-supla
 
-WORKDIR /app
+COPY run.sh /usr/local/bin/run.sh
+RUN chmod +x /usr/local/bin/run.sh
 
-CMD ["/app/run.sh"]
+WORKDIR /data
+
+CMD ["/usr/local/bin/run.sh"]
 
 LABEL \
     io.hass.version="VERSION" \

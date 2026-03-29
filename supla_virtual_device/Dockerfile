@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /opt/virtual-supla
 
 RUN git clone --depth 1 https://github.com/BBart19/virtual-supla.git . \
-    && ./install.sh \
+    && bash ./install.sh \
     && install -m 0755 ./src/supla-dev/Release/supla-virtual-device /usr/local/bin/supla-virtual-device \
     && install -m 0644 ./supla-virtual-device.cfg.sample /usr/local/share/supla-virtual-device.cfg.sample \
     && rm -rf /opt/virtual-supla

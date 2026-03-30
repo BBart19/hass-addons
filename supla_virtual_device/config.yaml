@@ -1,7 +1,7 @@
 name: "SUPLA Virtual Device"
-version: "4.2.0"
+version: "4.1.1"
 slug: "supla_virtual_device"
-description: "SUPLA Virtual Device based on BBart19/virtual-supla with dedicated addon config file and MQTT watchdog"
+description: "SUPLA Virtual Device based on BBart19/virtual-supla with MQTT watchdog"
 url: "https://github.com/BBart19/hass-addons/tree/main/supla_virtual_device"
 startup: services
 boot: auto
@@ -11,13 +11,39 @@ arch:
   - armv7
 init: false
 map:
-  - type: addon_config
-    read_only: false
-  - type: homeassistant_config
-    read_only: false
-    path: /homeassistant
+  - "config:rw"
 options:
   debug: false
+  config: |-
+    [GLOBAL]
+    device_name=SUPLA VIRTUAL DEVICE
+    device_guid_file=./var/dev_guid
+    state_file=./var/last_state.txt
+
+    [SERVER]
+    host=svrX.supla.org
+    protocol_version=23
+    tcp_port=2015
+    ssl_port=2016
+    ssl_enabled=1
+
+    [AUTH]
+    email=you@example.com
+
+    [MQTT]
+    host=192.168.1.100
+    port=1883
+    username=mqtt-user
+    password=mqtt-password
+    client_name=supla-virtual-device
+
+    # Add your channels below.
+    # Full reference:
+    # https://github.com/BBart19/virtual-supla/blob/main/supla-virtual-device.cfg.sample
+
+    [CHANNEL_0]
+    function=TEMPERATURE
+    state_topic=sensors/temperature/state
 schema:
   debug: bool
-  config: "str?"
+  config: str

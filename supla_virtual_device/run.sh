@@ -4,9 +4,6 @@ set -euo pipefail
 OPTIONS_FILE="/data/options.json"
 WORK_DIR="/data"
 CONFIG_FILE="${WORK_DIR}/supla-virtual-device.cfg"
-ADDON_CONFIG_DIR="/config"
-USER_CONFIG_FILE="${ADDON_CONFIG_DIR}/supla-virtual-device.cfg"
-HOMEASSISTANT_CONFIG_DIR="/homeassistant"
 STATE_DIR="${WORK_DIR}/var"
 SAMPLE_FILE="/usr/local/share/supla-virtual-device.cfg.sample"
 MQTT_CHECK_INTERVAL_SEC=5
@@ -20,54 +17,31 @@ log() {
     printf '[%s] [%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$level" "$*"
 }
 
-legacy_config_from_options() {
-    jq -r '.config // ""' "${OPTIONS_FILE}"
-}
-
-ensure_user_config_file() {
-    local tmp_file legacy_config
-
-    mkdir -p "${ADDON_CONFIG_DIR}"
-
-    if [[ -f "${USER_CONFIG_FILE}" ]]; then
-        return 0
-    fi
-
-    tmp_file="$(mktemp)"
-    legacy_config="$(legacy_config_from_options)"
-
-    if grep -q '[^[:space:]]' <<<"${legacy_config}"; then
-        log INFO "Migrating legacy addon option 'config' to ${USER_CONFIG_FILE}"
-        printf '%s\n' "${legacy_config}" > "${tmp_file}"
-    else
-        log WARN "Missing ${USER_CONFIG_FILE}, creating it from bundled sample configuration"
-        cp "${SAMPLE_FILE}" "${tmp_file}"
-    fi
-
-    sed -i 's/\r$//' "${tmp_file}"
-    mv "${tmp_file}" "${USER_CONFIG_FILE}"
-}
-
-write_runtime_config_from_file() {
+write_config_from_options() {
     local tmp_file
     tmp_file="$(mktemp)"
 
-    cp "${USER_CONFIG_FILE}" "${tmp_file}"
+    jq -r '.config // ""' "${OPTIONS_FILE}" > "${tmp_file}"
+
+    if ! grep -q '[^[:space:]]' "${tmp_file}"; then
+        log WARN "Addon option 'config' is empty, using bundled sample configuration"
+        cp "${SAMPLE_FILE}" "${tmp_file}"
+    fi
+
     sed -i 's/\r$//' "${tmp_file}"
     mv "${tmp_file}" "${CONFIG_FILE}"
 }
 
 prepare_runtime() {
-    mkdir -p "${WORK_DIR}" "${STATE_DIR}" "${ADDON_CONFIG_DIR}"
-    chmod 755 "${WORK_DIR}" "${STATE_DIR}" "${ADDON_CONFIG_DIR}"
+    mkdir -p "${WORK_DIR}" "${STATE_DIR}"
+    chmod 755 "${WORK_DIR}" "${STATE_DIR}"
 
     if [[ ! -f "${OPTIONS_FILE}" ]]; then
         log ERROR "Missing ${OPTIONS_FILE}"
         exit 1
     fi
 
-    ensure_user_config_file
-    write_runtime_config_from_file
+    write_config_from_options
 }
 
 trim() {
@@ -211,11 +185,9 @@ main() {
         log INFO "Debug logging enabled"
     fi
 
-    log INFO "Using configuration from addon config file"
-    log INFO "Addon config file: ${USER_CONFIG_FILE}"
-    log INFO "Runtime config file: ${CONFIG_FILE}"
+    log INFO "Using configuration from Home Assistant addon options"
+    log INFO "Config file: ${CONFIG_FILE}"
     log INFO "Persistent state directory: ${STATE_DIR}"
-    log INFO "Home Assistant config directory inside container: ${HOMEASSISTANT_CONFIG_DIR}"
     if ! is_mqtt_configured; then
         log INFO "MQTT not configured, starting SUPLA Virtual Device without MQTT watchdog"
         exec /usr/local/bin/supla-virtual-device "${args[@]}"

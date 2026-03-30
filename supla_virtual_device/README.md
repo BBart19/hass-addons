@@ -5,29 +5,21 @@ Ten addon uruchamia aktualny projekt [`BBart19/virtual-supla`](https://github.co
 ## Co jest nowe
 
 - addon buduje nowy `virtual-supla`, a nie stary historyczny fork
-- od wersji `4.2.0` glowny `supla-virtual-device.cfg` jest osobnym plikiem addonu, a nie duzym polem YAML w opcjach
+- pelne `supla-virtual-device.cfg` wpisujesz bezposrednio w zakladce **Konfiguracja**
 - stan urzadzenia, `dev_guid` i `last_state.txt` sa trzymane trwale w `/data/var`
-- mozna dalej korzystac z plikow z Home Assistanta
+- mozesz dalej korzystac z plikow z Home Assistanta, np. przez sciezki w `/config/...`
 
 ## Konfiguracja
 
-W opcjach addonu zostaje tylko:
+Najwazniejsze pole addonu to:
+
+- `config` - pelna zawartosc pliku `supla-virtual-device.cfg`
+
+Opcjonalnie:
 
 - `debug` - uruchamia `supla-virtual-device -D`
 
-Wlasciwy plik konfiguracyjny addonu:
-
-- wewnatrz kontenera: `/config/supla-virtual-device.cfg`
-- po stronie Home Assistant: `/addon_configs/<REPO>_supla_virtual_device/supla-virtual-device.cfg`
-
-Przy pierwszym starcie addon:
-
-- migruje stara wartosc opcji `config`, jesli byla jeszcze ustawiona
-- albo tworzy plik z bundlowanego sample
-
-Jesli chcesz odwolywac sie do glownego katalogu konfiguracji Home Assistant z tego addonu, uzywaj teraz:
-
-- `/homeassistant/...`
+Domyslny config w `config.yaml` jest zapisany jako zwarty blok YAML `|-`, zeby byl czytelniejszy. Trzeba jednak uczciwie zaznaczyc, ze Home Assistant moze po edycji i zapisie przepisac ten wielolinijkowy string po swojemu. To zachowanie edytora HA, a nie samego addonu.
 
 ## MQTT watchdog
 
@@ -39,44 +31,45 @@ Jesli w konfiguracji jest sekcja `[MQTT]` z ustawionym `host`, addon pilnuje dos
 
 Dzieki temu SUPLA nie powinna mylaco pokazywac urzadzen jako online, gdy backend MQTT juz nie dziala.
 
-Domyslnie addon startuje z prostym szkieletem konfiguracji. Pelny wzor wszystkich opcji znajdziesz tutaj:
+Pelny wzor wszystkich opcji znajdziesz tutaj:
 
 - https://github.com/BBart19/virtual-supla/blob/main/supla-virtual-device.cfg.sample
 
 ## Przyklad
 
-```ini
-[GLOBAL]
-device_name=SUPLA VIRTUAL DEVICE
-device_guid_file=./var/dev_guid
-state_file=./var/last_state.txt
+```yaml
+debug: false
+config: |-
+  [GLOBAL]
+  device_name=SUPLA VIRTUAL DEVICE
+  device_guid_file=./var/dev_guid
+  state_file=./var/last_state.txt
 
-[SERVER]
-host=svrX.supla.org
-protocol_version=23
-tcp_port=2015
-ssl_port=2016
-ssl_enabled=1
+  [SERVER]
+  host=svrX.supla.org
+  protocol_version=23
+  tcp_port=2015
+  ssl_port=2016
+  ssl_enabled=1
 
-[AUTH]
-email=you@example.com
+  [AUTH]
+  email=you@example.com
 
-[MQTT]
-host=192.168.1.100
-port=1883
-username=mqtt-user
-password=mqtt-password
-client_name=supla-virtual-device
+  [MQTT]
+  host=192.168.1.100
+  port=1883
+  username=mqtt-user
+  password=mqtt-password
+  client_name=supla-virtual-device
 
-[CHANNEL_0]
-function=TEMPERATURE
-state_topic=sensors/temperature/state
+  [CHANNEL_0]
+  function=TEMPERATURE
+  state_topic=sensors/temperature/state
 ```
 
 ## Uwaga
 
 Jesli uzywasz kanalow plikowych, odwolywaj sie do sciezek dostepnych w kontenerze addonu, najczesciej:
 
-- `/homeassistant/...`
 - `/config/...`
 - `/data/...`

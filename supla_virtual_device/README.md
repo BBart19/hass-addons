@@ -19,6 +19,18 @@ Opcjonalnie:
 
 - `debug` - uruchamia `supla-virtual-device -D`
 
+## MQTT watchdog
+
+Jesli w konfiguracji jest sekcja `[MQTT]` z ustawionym `host`, addon pilnuje
+dostepnosci brokera MQTT:
+
+- nie startuje `supla-virtual-device`, dopoki broker MQTT nie odpowiada
+- zatrzymuje `supla-virtual-device`, gdy broker MQTT przestaje odpowiadac
+- uruchamia go ponownie dopiero po powrocie brokera
+
+Dzieki temu SUPLA nie powinna mylaco pokazywac urzadzen jako online, gdy
+backend MQTT juz nie dziala.
+
 Domyślnie addon startuje z prostym szkieletem konfiguracji. Pełny wzór wszystkich opcji znajdziesz tutaj:
 
 - https://github.com/BBart19/virtual-supla/blob/main/supla-virtual-device.cfg.sample

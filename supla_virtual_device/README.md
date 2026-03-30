@@ -5,37 +5,45 @@ Ten addon uruchamia aktualny projekt [`BBart19/virtual-supla`](https://github.co
 ## Co jest nowe
 
 - addon buduje nowy `virtual-supla`, a nie stary historyczny fork
-- całe `supla-virtual-device.cfg` wpisujesz bezpośrednio w zakładce **Konfiguracja**
-- stan urządzenia, `dev_guid` i `last_state.txt` są trzymane trwale w `/data/var`
-- możesz dalej korzystać z plików z Home Assistanta, np. przez ścieżki w `/config/...`
+- od wersji `4.2.0` glowny `supla-virtual-device.cfg` jest osobnym plikiem addonu, a nie duzym polem YAML w opcjach
+- stan urzadzenia, `dev_guid` i `last_state.txt` sa trzymane trwale w `/data/var`
+- mozna dalej korzystac z plikow z Home Assistanta
 
 ## Konfiguracja
 
-Najważniejsze pole addonu to:
-
-- `config` - pełna zawartość pliku `supla-virtual-device.cfg`
-
-Opcjonalnie:
+W opcjach addonu zostaje tylko:
 
 - `debug` - uruchamia `supla-virtual-device -D`
 
+Wlasciwy plik konfiguracyjny addonu:
+
+- wewnatrz kontenera: `/config/supla-virtual-device.cfg`
+- po stronie Home Assistant: `/addon_configs/<REPO>_supla_virtual_device/supla-virtual-device.cfg`
+
+Przy pierwszym starcie addon:
+
+- migruje stara wartosc opcji `config`, jesli byla jeszcze ustawiona
+- albo tworzy plik z bundlowanego sample
+
+Jesli chcesz odwolywac sie do glownego katalogu konfiguracji Home Assistant z tego addonu, uzywaj teraz:
+
+- `/homeassistant/...`
+
 ## MQTT watchdog
 
-Jesli w konfiguracji jest sekcja `[MQTT]` z ustawionym `host`, addon pilnuje
-dostepnosci brokera MQTT:
+Jesli w konfiguracji jest sekcja `[MQTT]` z ustawionym `host`, addon pilnuje dostepnosci brokera MQTT:
 
 - nie startuje `supla-virtual-device`, dopoki broker MQTT nie odpowiada
 - zatrzymuje `supla-virtual-device`, gdy broker MQTT przestaje odpowiadac
 - uruchamia go ponownie dopiero po powrocie brokera
 
-Dzieki temu SUPLA nie powinna mylaco pokazywac urzadzen jako online, gdy
-backend MQTT juz nie dziala.
+Dzieki temu SUPLA nie powinna mylaco pokazywac urzadzen jako online, gdy backend MQTT juz nie dziala.
 
-Domyślnie addon startuje z prostym szkieletem konfiguracji. Pełny wzór wszystkich opcji znajdziesz tutaj:
+Domyslnie addon startuje z prostym szkieletem konfiguracji. Pelny wzor wszystkich opcji znajdziesz tutaj:
 
 - https://github.com/BBart19/virtual-supla/blob/main/supla-virtual-device.cfg.sample
 
-## Przykład
+## Przyklad
 
 ```ini
 [GLOBAL]
@@ -67,7 +75,8 @@ state_topic=sensors/temperature/state
 
 ## Uwaga
 
-Jeśli używasz kanałów plikowych, odwołuj się do ścieżek dostępnych w kontenerze addonu, najczęściej:
+Jesli uzywasz kanalow plikowych, odwolywaj sie do sciezek dostepnych w kontenerze addonu, najczesciej:
 
+- `/homeassistant/...`
 - `/config/...`
 - `/data/...`

@@ -7,6 +7,7 @@ CONFIG_FILE="${WORK_DIR}/supla-virtual-device.cfg"
 STATE_DIR="${WORK_DIR}/var"
 SAMPLE_FILE="/usr/local/share/supla-virtual-device.cfg.sample"
 MQTT_CHECK_INTERVAL_SEC=5
+MQTT_MONITOR_TIMEOUT_SEC=30
 MQTT_MONITOR_START_GRACE_SEC=2
 
 child_pid=""
@@ -169,6 +170,7 @@ start_mqtt_monitor() {
         -i "${client_id}"
         -t '$SYS/broker/uptime'
         -q 0
+        -W "${MQTT_MONITOR_TIMEOUT_SEC}"
         -R
     )
 

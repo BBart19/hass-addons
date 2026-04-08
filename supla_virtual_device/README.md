@@ -29,6 +29,7 @@ Jesli w konfiguracji jest sekcja `[MQTT]` z ustawionym `host`, addon pilnuje dos
 - zatrzymuje `supla-virtual-device`, gdy broker MQTT przestaje odpowiadac
 - uruchamia go ponownie dopiero po powrocie brokera
 - watchdog utrzymuje jedno stale polaczenie MQTT zamiast wykonywac surowy test TCP co kilka sekund, wiec nie zasypuje juz Mosquitto wpisami `Client <unknown> closed its connection`
+- watchdog nie wygasa juz po 30 sekundach bez wiadomosci MQTT, wiec nie powinien powodowac cyklicznego przechodzenia urzadzenia offline/online
 
 Dzieki temu SUPLA nie powinna mylaco pokazywac urzadzen jako online, gdy backend MQTT juz nie dziala.
 

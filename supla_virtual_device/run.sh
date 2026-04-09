@@ -7,9 +7,10 @@ CONFIG_FILE="${WORK_DIR}/supla-virtual-device.cfg"
 STATE_DIR="${WORK_DIR}/var"
 SAMPLE_FILE="/usr/local/share/supla-virtual-device.cfg.sample"
 MQTT_CHECK_INTERVAL_SEC=5
-MQTT_CONNECT_TIMEOUT_SEC=2
+MQTT_MONITOR_START_GRACE_SEC=2
 
 child_pid=""
+mqtt_monitor_pid=""
 
 log() {
     local level="$1"
@@ -100,21 +101,97 @@ mqtt_port() {
     printf '%s' "${port}"
 }
 
+mqtt_username() {
+    get_config_value "MQTT" "username"
+}
+
+mqtt_password() {
+    get_config_value "MQTT" "password"
+}
+
+mqtt_client_name() {
+    get_config_value "MQTT" "client_name"
+}
+
+mqtt_monitor_client_id() {
+    local client_name
+    client_name="$(trim "$(mqtt_client_name)")"
+
+    if [[ -z "${client_name}" ]]; then
+        client_name="supla-virtual-device"
+    fi
+
+    printf '%s-watchdog' "${client_name}"
+}
+
 is_mqtt_configured() {
     [[ -n "$(trim "$(mqtt_host)")" ]]
 }
 
-mqtt_available() {
-    local host port
+stop_mqtt_monitor() {
+    local pid="${mqtt_monitor_pid}"
+
+    if [[ -z "${pid}" ]]; then
+        return 0
+    fi
+
+    if ! kill -0 "${pid}" >/dev/null 2>&1; then
+        wait "${pid}" >/dev/null 2>&1 || true
+        mqtt_monitor_pid=""
+        return 0
+    fi
+
+    kill "${pid}" >/dev/null 2>&1 || true
+    wait "${pid}" >/dev/null 2>&1 || true
+    mqtt_monitor_pid=""
+}
+
+start_mqtt_monitor() {
+    local host port username password client_id
+    local -a cmd
+
     host="$(trim "$(mqtt_host)")"
     port="$(trim "$(mqtt_port)")"
+    username="$(trim "$(mqtt_username)")"
+    password="$(trim "$(mqtt_password)")"
+    client_id="$(mqtt_monitor_client_id)"
 
     if [[ -z "${host}" ]]; then
         return 0
     fi
 
-    timeout "${MQTT_CONNECT_TIMEOUT_SEC}" bash -c "exec 3<>/dev/tcp/${host}/${port}" \
-        >/dev/null 2>&1
+    stop_mqtt_monitor
+
+    cmd=(
+        mosquitto_sub
+        -h "${host}"
+        -p "${port}"
+        -i "${client_id}"
+        -t '$SYS/broker/uptime'
+        -q 0
+        -R
+    )
+
+    if [[ -n "${username}" ]]; then
+        cmd+=(-u "${username}")
+    fi
+
+    if [[ -n "${password}" ]]; then
+        cmd+=(-P "${password}")
+    fi
+
+    "${cmd[@]}" >/dev/null 2>&1 &
+    mqtt_monitor_pid="$!"
+
+    sleep "${MQTT_MONITOR_START_GRACE_SEC}"
+
+    if ! kill -0 "${mqtt_monitor_pid}" >/dev/null 2>&1; then
+        wait "${mqtt_monitor_pid}" >/dev/null 2>&1 || true
+        mqtt_monitor_pid=""
+        return 1
+    fi
+
+    return 0
 }
 
 wait_for_mqtt() {
@@ -128,7 +205,7 @@ wait_for_mqtt() {
 
     log INFO "MQTT watchdog enabled for ${host}:${port}"
 
-    until mqtt_available; do
+    until start_mqtt_monitor; do
         log WARN "MQTT broker ${host}:${port} unavailable, waiting before starting SUPLA Virtual Device"
         sleep "${MQTT_CHECK_INTERVAL_SEC}"
     done
@@ -163,6 +240,7 @@ stop_child() {
 
 handle_exit() {
     stop_child
+    stop_mqtt_monitor
 }
 
 start_supla() {
@@ -199,14 +277,18 @@ main() {
         start_supla "${args[@]}"
 
         while kill -0 "${child_pid}" >/dev/null 2>&1; do
-            if ! mqtt_available; then
+            if ! kill -0 "${mqtt_monitor_pid}" >/dev/null 2>&1; then
+                wait "${mqtt_monitor_pid}" >/dev/null 2>&1 || true
+                mqtt_monitor_pid=""
                 log WARN "MQTT broker unavailable, stopping SUPLA Virtual Device until broker returns"
                 stop_child
                 break
             fi
 
-            sleep "${MQTT_CHECK_INTERVAL_SEC}"
+            sleep 1
         done
+
+        stop_mqtt_monitor
 
         if [[ -n "${child_pid}" ]]; then
             wait "${child_pid}" >/dev/null 2>&1 || true

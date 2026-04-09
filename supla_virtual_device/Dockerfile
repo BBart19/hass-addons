@@ -7,7 +7,6 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     curl \
     git \
-    iproute2 \
     jq \
     mosquitto-clients \
     libssl-dev \

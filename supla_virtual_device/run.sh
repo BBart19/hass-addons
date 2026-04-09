@@ -146,35 +146,6 @@ stop_mqtt_monitor() {
     mqtt_monitor_pid=""
 }
 
-mqtt_monitor_running() {
-    local pid="${mqtt_monitor_pid}"
-    local stat=""
-
-    if [[ -z "${pid}" ]]; then
-        return 1
-    fi
-
-    if ! kill -0 "${pid}" >/dev/null 2>&1; then
-        wait "${pid}" >/dev/null 2>&1 || true
-        mqtt_monitor_pid=""
-        return 1
-    fi
-
-    stat="$(ps -o stat= -p "${pid}" 2>/dev/null | tr -d '[:space:]')"
-    if [[ -z "${stat}" || "${stat}" == Z* ]]; then
-        wait "${pid}" >/dev/null 2>&1 || true
-        mqtt_monitor_pid=""
-        return 1
-    fi
-
-    return 0
-}
-
-mqtt_monitor_connected() {
-    mqtt_monitor_running || return 1
-    ss -ntpH 2>/dev/null | grep -F "ESTAB" | grep -F "pid=${mqtt_monitor_pid}," >/dev/null 2>&1
-}
-
 start_mqtt_monitor() {
     local host port username password client_id
     local -a cmd
@@ -214,7 +185,13 @@ start_mqtt_monitor() {
 
     sleep "${MQTT_MONITOR_START_GRACE_SEC}"
 
-    mqtt_monitor_connected
+    if ! kill -0 "${mqtt_monitor_pid}" >/dev/null 2>&1; then
+        wait "${mqtt_monitor_pid}" >/dev/null 2>&1 || true
+        mqtt_monitor_pid=""
+        return 1
+    fi
+
+    return 0
 }
 
 wait_for_mqtt() {
@@ -228,13 +205,8 @@ wait_for_mqtt() {
 
     log INFO "MQTT watchdog enabled for ${host}:${port}"
 
-    while true; do
-        if start_mqtt_monitor; then
-            return 0
-        fi
-
+    until start_mqtt_monitor; do
         log WARN "MQTT broker ${host}:${port} unavailable, waiting before starting SUPLA Virtual Device"
-        stop_mqtt_monitor
         sleep "${MQTT_CHECK_INTERVAL_SEC}"
     done
 }
@@ -305,7 +277,9 @@ main() {
         start_supla "${args[@]}"
 
         while kill -0 "${child_pid}" >/dev/null 2>&1; do
-            if ! mqtt_monitor_connected; then
+            if ! kill -0 "${mqtt_monitor_pid}" >/dev/null 2>&1; then
+                wait "${mqtt_monitor_pid}" >/dev/null 2>&1 || true
+                mqtt_monitor_pid=""
                 log WARN "MQTT broker unavailable, stopping SUPLA Virtual Device until broker returns"
                 stop_child
                 break

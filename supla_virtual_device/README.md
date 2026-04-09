@@ -19,6 +19,10 @@ Opcjonalnie:
 
 - `debug` - uruchamia `supla-virtual-device -D`
 
+Jesli uruchamiasz dwie instancje addonu na tym samym brokerze MQTT, ustaw rozne
+`client_name` w sekcji `[MQTT]`. Ten sam MQTT client ID w dwoch instancjach
+powoduje, ze broker rozlacza jedna z nich.
+
 Domyslny config w `config.yaml` jest zapisany jako zwarty blok YAML `|-`, zeby byl czytelniejszy. Trzeba jednak uczciwie zaznaczyc, ze Home Assistant moze po edycji i zapisie przepisac ten wielolinijkowy string po swojemu. To zachowanie edytora HA, a nie samego addonu.
 
 ## MQTT watchdog

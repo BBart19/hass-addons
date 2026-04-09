@@ -1,5 +1,5 @@
 name: "SUPLA Virtual Device"
-version: "4.1.5"
+version: "4.1.6"
 slug: "supla_virtual_device"
 description: "SUPLA Virtual Device based on BBart19/virtual-supla with MQTT watchdog"
 url: "https://github.com/BBart19/hass-addons/tree/main/supla_virtual_device"
@@ -34,6 +34,7 @@ options:
     port=1883
     username=mqtt-user
     password=mqtt-password
+    # use a unique client_name for each addon instance on the same broker
     client_name=supla-virtual-device
 
     # Add your channels below.

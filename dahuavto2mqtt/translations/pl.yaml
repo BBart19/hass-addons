@@ -1,0 +1,34 @@
+---
+configuration:
+  dahua_vto_host:
+    name: Host Dahua VTO
+    description: Adres IP lub nazwa hosta bez protokołu i numeru portu.
+  dahua_vto_username:
+    name: Użytkownik Dahua VTO
+    description: Nazwa użytkownika używana do połączenia z urządzeniem Dahua.
+  dahua_vto_password:
+    name: Hasło Dahua VTO
+    description: Hasło używane do połączenia z urządzeniem Dahua.
+  mqtt_broker_host:
+    name: Host brokera MQTT
+    description: Adres IP lub nazwa hosta brokera MQTT.
+  mqtt_broker_port:
+    name: Port brokera MQTT
+    description: Port TCP używany przez broker MQTT.
+  mqtt_broker_username:
+    name: Użytkownik MQTT
+    description: Nazwa użytkownika używana do połączenia z brokerem MQTT.
+  mqtt_broker_password:
+    name: Hasło MQTT
+    description: Hasło używane do połączenia z brokerem MQTT.
+  mqtt_broker_topic_prefix:
+    name: Prefiks tematów MQTT
+    description: Prefiks tematów bez końcowego ukośnika.
+  mqtt_broker_client_id:
+    name: Identyfikator klienta MQTT
+    description: Unikalny identyfikator klienta używany w połączeniu MQTT.
+  debug:
+    name: Logowanie debug
+    description: Włącza szczegółowe logi upstream, które mogą zawierać surowe zdarzenia.
+network:
+  9563/tcp: Eksporter metryk Prometheus

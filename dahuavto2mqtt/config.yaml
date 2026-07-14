@@ -1,0 +1,42 @@
+---
+name: "Dahua VTO to MQTT"
+version: "1.0.0"
+slug: "dahuavto2mqtt"
+description: "Publishes Dahua VTO, camera and NVR events to MQTT"
+url: "https://github.com/BBart19/hass-addons/tree/main/dahuavto2mqtt"
+startup: services
+boot: auto
+init: true
+stage: stable
+arch:
+  - amd64
+  - aarch64
+ports:
+  "9563/tcp": 9563
+ports_description:
+  "9563/tcp": "Prometheus metrics exporter"
+services:
+  - "mqtt:want"
+watchdog: "http://[HOST]:[PORT:9563]/metrics"
+options:
+  dahua_vto_host: null
+  dahua_vto_username: null
+  dahua_vto_password: null
+  mqtt_broker_host: "core-mosquitto"
+  mqtt_broker_port: 1883
+  mqtt_broker_username: null
+  mqtt_broker_password: null
+  mqtt_broker_topic_prefix: "DahuaVTO"
+  mqtt_broker_client_id: "DahuaVTO2MQTT"
+  debug: false
+schema:
+  dahua_vto_host: str
+  dahua_vto_username: str
+  dahua_vto_password: password
+  mqtt_broker_host: str
+  mqtt_broker_port: port
+  mqtt_broker_username: str
+  mqtt_broker_password: password
+  mqtt_broker_topic_prefix: str
+  mqtt_broker_client_id: str
+  debug: bool
